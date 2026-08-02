@@ -1,0 +1,15 @@
+create table backup (id bigint not null auto_increment, version bigint not null, full_path varchar(255), storage_provider varchar(255) not null, executed_at datetime, created_at datetime, exit_code integer, size varchar(255), created_by_id bigint, filename varchar(255), state varchar(255), success bit not null, database_id bigint not null, primary key (id)) engine=InnoDB;
+create table db (id bigint not null auto_increment, version bigint not null, storage_provider varchar(255) not null, friendly_name varchar(255), host_id bigint not null, password varchar(255), user varchar(255), database_name varchar(255) not null, primary key (id)) engine=InnoDB;
+create table host (id bigint not null auto_increment, version bigint not null, ssh_hostname varchar(255), ssh_port integer, port integer not null, ssh_key longtext, friendly_name varchar(255), ssh_user varchar(255), hostname varchar(255) not null, primary key (id)) engine=InnoDB;
+create table role (id bigint not null auto_increment, version bigint not null, authority varchar(255) not null, primary key (id)) engine=InnoDB;
+create table user (id bigint not null auto_increment, version bigint not null, password_expired bit not null, username varchar(255) not null, account_locked bit not null, `password` varchar(255) not null, account_expired bit not null, enabled bit not null, email varchar(255) not null, primary key (id)) engine=InnoDB;
+create table user_role (user_id bigint not null, role_id bigint not null, primary key (user_id, role_id)) engine=InnoDB;
+alter table host add constraint UK_8xvlo8ocriuqpss4x0vcppox2 unique (friendly_name);
+alter table role add constraint UK_irsamgnera6angm0prq1kemt2 unique (authority);
+alter table user add constraint UK_sb8bbouer5wak8vyiiy4pf2bx unique (username);
+alter table user add constraint UK_ob8kqyqqgmefl0aco34akdtpe unique (email);
+alter table backup add constraint FK7swagyfna4r943h6tuyyyed3 foreign key (created_by_id) references user (id);
+alter table backup add constraint FK4jn4kco1xy3v5ip0pspykh9p2 foreign key (database_id) references db (id);
+alter table db add constraint FKrhkalet2o5h2p4oqj26r1yt59 foreign key (host_id) references host (id);
+alter table user_role add constraint FK859n2jvi8ivhui0rl0esws6o foreign key (user_id) references user (id);
+alter table user_role add constraint FKa68196081fvovjhkek5m97n3y foreign key (role_id) references role (id);

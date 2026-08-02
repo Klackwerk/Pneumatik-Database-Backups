@@ -1,0 +1,1108 @@
+openapi: 3.0.3
+info:
+  title: Pneumatik Database Backups API
+  description: |
+    REST API of Pneumatik, a self-hosted database backup service.
+
+    All endpoints (except login, the OpenAPI document, and the X-API-Key
+    machine endpoint) require a JWT bearer token obtained from
+    `POST /api/v1/auth/login`.
+
+    Every success response wraps its payload in `{"data": ..., "meta": ...}`;
+    every error response is `{"error": {"code", "message", "fields"?}}`.
+    Validation failures return HTTP 422 with per-field errors.
+  version: 3.2.1
+  license:
+    name: AGPL-3.0-or-later
+    url: https://www.gnu.org/licenses/agpl-3.0.html
+  contact:
+    name: klackwerk IT & Events GmbH
+    url: https://github.com/Klackwerk/Pneumatik-Database-Backups
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Log in and obtain a JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Bad credentials
+        '429':
+          description: Too many failed attempts; retry after the Retry-After header
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Exchange a refresh token for a new access token
+      description: >
+        The refresh token is rotated: the presented one stops working and the
+        response carries its replacement. Public, because an expired access
+        token must not be needed to renew a session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: Renewed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: Refresh token unknown, expired, already used, or the account can no longer sign in
+
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke a refresh token
+      description: >
+        Access tokens are stateless and simply expire; this stops the session
+        being renewed. Always 204, whether or not the token existed.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '204': { description: Revoked }
+
+  /api/v1/hosts:
+    get:
+      tags: [hosts]
+      summary: List hosts
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: Hosts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Host' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [hosts]
+      summary: Create a host
+      requestBody:
+        $ref: '#/components/requestBodies/HostInput'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Host' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/hosts/{id}:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      tags: [hosts]
+      summary: Get a host
+      responses:
+        '200':
+          description: Host
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Host' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [hosts]
+      summary: Update a host
+      description: Omit `sshKey` to keep the stored key unchanged.
+      requestBody:
+        $ref: '#/components/requestBodies/HostInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Host' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [hosts]
+      summary: Delete a host
+      description: >
+        Also deletes every database on this host, their backup history and
+        every stored archive. Read `databaseCount` and `backupCount` from the
+        host first and confirm with the user.
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/databases:
+    get:
+      tags: [databases]
+      summary: List databases
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: Databases
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Database' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [databases]
+      summary: Create a database
+      requestBody:
+        $ref: '#/components/requestBodies/DatabaseInput'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Database' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/databases/{id}:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      tags: [databases]
+      summary: Get a database
+      responses:
+        '200':
+          description: Database
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Database' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [databases]
+      summary: Update a database
+      description: Omit `password` to keep the stored password unchanged.
+      requestBody:
+        $ref: '#/components/requestBodies/DatabaseInput'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Database' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [databases]
+      summary: Delete a database
+      description: >
+        Also deletes its backup history, every stored archive and its
+        retention policy. Read `backupCount` from the database first and
+        confirm with the user.
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/databases/{id}/backups:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      tags: [backups]
+      summary: Queue a backup of this database now
+      description: The backup runs asynchronously; the queue is drained about once a minute.
+      responses:
+        '202':
+          description: Backup queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/QueuedBackup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/databases/{databaseId}/retention-policy:
+    parameters:
+      - name: databaseId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [retention]
+      summary: Get the database's retention policy
+      responses:
+        '200':
+          description: Retention policy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/RetentionPolicy' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [retention]
+      summary: Create or replace the database's retention policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RetentionPolicyInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/RetentionPolicy' }
+        '201':
+          description: Created
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/RetentionPolicy' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [retention]
+      summary: Delete the database's retention policy
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/backups:
+    get:
+      tags: [backups]
+      summary: List backups
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: search
+          in: query
+          description: Filters by database name (friendly name or database name)
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [createdAt, executedAt, state, size, success, name]
+            default: createdAt
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: databaseId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: hostId
+          in: query
+          description: Only backups of databases on this host
+          schema: { type: string, format: uuid }
+        - name: state
+          in: query
+          description: Only backups in this state
+          schema: { $ref: '#/components/schemas/BackupState' }
+      responses:
+        '200':
+          description: Backups
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Backup' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/backups/{id}:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      tags: [backups]
+      summary: Get a backup with its captured command output
+      responses:
+        '200':
+          description: Backup
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/BackupDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [backups]
+      summary: Delete a backup (record and stored file)
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/backups/{id}/download-token:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      tags: [backups]
+      summary: Mint a single-use download ticket
+      description: >
+        A browser navigation cannot send an Authorization header, so
+        downloading through `fetch` means holding the whole archive in memory.
+        Request a ticket here, then point a link at
+        `/api/v1/backups/{id}/download?token=…` and let the browser stream it
+        to disk. The ticket is valid once and expires within seconds.
+      responses:
+        '200':
+          description: Ticket
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      token: { type: string }
+                      expiresIn: { type: integer, description: Seconds until the ticket expires }
+                      filename: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/backups/{id}/download:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      tags: [backups]
+      summary: Download the stored backup archive
+      description: >
+        Authorized either by a bearer token or by a single-use `token` from
+        the download-ticket endpoint.
+      security: []
+      parameters:
+        - name: token
+          in: query
+          description: Single-use download ticket; required when no bearer token is sent
+          schema: { type: string }
+      responses:
+        '200':
+          description: Zip archive
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502':
+          description: Backup file could not be read from storage
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /api/v1/stats/dashboard:
+    get:
+      tags: [stats]
+      summary: Aggregated statistics for the dashboard
+      responses:
+        '200':
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/DashboardStats' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/api-keys:
+    get:
+      tags: [api-keys]
+      summary: List the current user's API keys
+      responses:
+        '200':
+          description: API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ApiKey' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [api-keys]
+      summary: Create an API key
+      description: The response contains the plaintext key exactly once; store it now.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment: { type: string, nullable: true }
+                validUntil: { type: string, format: date-time, nullable: true }
+                databaseIds:
+                  type: array
+                  nullable: true
+                  description: >
+                    Databases this key may trigger backups for. Omit or send
+                    an empty list for a key that can back up every database.
+                  items: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Created — `key` holds the one-time plaintext key
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/CreatedApiKey' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/api-keys/{id}:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    delete:
+      tags: [api-keys]
+      summary: Delete an API key
+      description: Only the user who created a key may delete it.
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/users/me:
+    get:
+      tags: [users]
+      summary: Get the current user
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/users/me/password:
+    put:
+      tags: [users]
+      summary: Change the current user's password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [passwordOld, passwordNew, passwordNewConfirm]
+              properties:
+                passwordOld: { type: string, format: password }
+                passwordNew: { type: string, format: password, minLength: 6 }
+                passwordNewConfirm: { type: string, format: password }
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/users:
+    get:
+      tags: [users]
+      summary: List users
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, format: password, minLength: 6 }
+                roles:
+                  type: array
+                  items: { type: string }
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      tags: [users]
+      summary: Get a user
+      responses:
+        '200':
+          description: User
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [users]
+      summary: Update a user
+      description: Omit `password` to keep it unchanged. `authorities` replaces the user's role set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email]
+              properties:
+                username: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, format: password, minLength: 6, nullable: true }
+                enabled: { type: boolean }
+                authorities:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/backup/create/{databaseId}:
+    parameters:
+      - name: databaseId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [machine]
+      summary: Queue a backup (machine-to-machine)
+      description: |
+        Legacy-compatible endpoint authenticated with an `X-API-Key` header
+        instead of a JWT. Kept verbatim from Pneumatik 1.x.
+      security:
+        - apiKeyAuth: []
+      responses:
+        '200':
+          description: Backup queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/QueuedBackup' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    pageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 25 }
+
+  requestBodies:
+    HostInput:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [hostname]
+            properties:
+              friendlyName: { type: string, nullable: true }
+              hostname: { type: string }
+              port: { type: integer, nullable: true, description: 'defaults to 3306' }
+              sshHostname: { type: string, nullable: true }
+              sshUser: { type: string, nullable: true }
+              sshPort: { type: integer, nullable: true }
+              sshKey: { type: string, nullable: true, description: 'SSH private key; stored encrypted, never returned' }
+              useSSL: { type: boolean, nullable: true }
+              verifyHostKey:
+                type: boolean
+                nullable: true
+                description: >
+                  Verify the SSH host key. Without it, anything that can answer
+                  for the hostname receives the database password.
+              hostKey:
+                type: string
+                nullable: true
+                description: >
+                  Pinned host key in known_hosts format. Leave empty to pin
+                  whatever the first verified connection sees; send an empty
+                  string to forget the pin and re-learn it.
+    DatabaseInput:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [databaseName, hostId, storageProvider, trigger]
+            properties:
+              friendlyName: { type: string, nullable: true }
+              databaseName: { type: string }
+              hostId: { type: string, format: uuid }
+              user: { type: string, nullable: true }
+              password: { type: string, format: password, nullable: true, description: 'stored encrypted, never returned' }
+              storageProvider: { $ref: '#/components/schemas/StorageProvider' }
+              trigger: { $ref: '#/components/schemas/Trigger' }
+              databaseType: { $ref: '#/components/schemas/DatabaseType' }
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: Not allowed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    BadRequest:
+      description: Invalid request parameter
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: Request conflicts with resource state
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ValidationError:
+      description: Validation failed; `error.fields` maps field names to errors
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            fields:
+              type: object
+              nullable: true
+              additionalProperties:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code: { type: string }
+                    message: { type: string }
+
+    PaginatedEnvelope:
+      type: object
+      properties:
+        meta:
+          type: object
+          properties:
+            page: { type: integer }
+            pageSize: { type: integer }
+            total: { type: integer, format: int64 }
+            filtered: { type: integer, format: int64, nullable: true }
+
+    LoginResponse:
+      type: object
+      properties:
+        username: { type: string }
+        roles:
+          type: array
+          items: { type: string }
+        token_type: { type: string }
+        access_token: { type: string }
+        expires_in: { type: integer }
+        refresh_token: { type: string }
+
+    StorageProvider:
+      type: string
+      enum: [DIRECT, S3]
+
+    Trigger:
+      type: string
+      enum: [TRIGGER_HOURLY, TRIGGER_4HOURLY, TRIGGER_12HOURLY, TRIGGER_DAILY, TRIGGER_MANUAL]
+
+    DatabaseType:
+      type: string
+      enum: [MYSQL, POSTGRESQL]
+      nullable: true
+
+    BackupState:
+      type: string
+      enum: [CREATED, RUNNING, FINISHED, FAILED]
+      nullable: true
+
+    Host:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        friendlyName: { type: string, nullable: true }
+        name: { type: string, description: 'friendlyName if set, else hostname' }
+        hostname: { type: string }
+        port: { type: integer }
+        sshHostname: { type: string, nullable: true }
+        sshUser: { type: string, nullable: true }
+        sshPort: { type: integer, nullable: true }
+        hasSshKey: { type: boolean }
+        useSSL: { type: boolean }
+        verifyHostKey: { type: boolean, description: 'whether the SSH host key must match hostKey' }
+        hostKey:
+          type: string
+          nullable: true
+          description: 'pinned host key in known_hosts format; null until the first verified connection'
+        databaseCount:
+          type: integer
+          format: int64
+          description: 'databases on this host; what a delete would take with it'
+        databaseNames:
+          type: array
+          description: 'names of those databases (detail view only)'
+          items: { type: string }
+        backupCount:
+          type: integer
+          format: int64
+          description: 'backups across those databases (detail view only)'
+
+    Database:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        friendlyName: { type: string, nullable: true }
+        name: { type: string, description: 'friendlyName if set, else databaseName' }
+        databaseName: { type: string }
+        hostId: { type: string, format: uuid }
+        hostName: { type: string }
+        user: { type: string, nullable: true }
+        hasPassword: { type: boolean }
+        storageProvider: { $ref: '#/components/schemas/StorageProvider' }
+        trigger: { $ref: '#/components/schemas/Trigger' }
+        databaseType: { $ref: '#/components/schemas/DatabaseType' }
+        backupCount:
+          type: integer
+          format: int64
+          description: 'backups of this database; what a delete would take with it'
+        storedFileCount:
+          type: integer
+          format: int64
+          description: 'of those, how many still have a stored archive (detail view only)'
+
+    Backup:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        databaseId: { type: string, format: uuid }
+        databaseName: { type: string }
+        createdAt: { type: string, format: date-time, nullable: true }
+        executedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        durationMs: { type: integer, format: int64, nullable: true, description: 'run duration in milliseconds (finishedAt - executedAt)' }
+        filename: { type: string, nullable: true }
+        size: { type: string, nullable: true, description: 'human-readable, e.g. "12.5 MB"' }
+        rawSizeBytes: { type: integer, format: int64, nullable: true, description: 'size of the uncompressed dump' }
+        archivedSizeBytes: { type: integer, format: int64, nullable: true, description: 'size of the stored zip archive' }
+        encrypted: { type: boolean, description: 'whether the stored archive is AES-256-GCM encrypted' }
+        state: { $ref: '#/components/schemas/BackupState' }
+        exitCode: { type: integer, nullable: true }
+        success: { type: boolean }
+        storageProvider: { $ref: '#/components/schemas/StorageProvider' }
+        createdBy: { type: string, nullable: true, description: 'username; null for scheduled backups' }
+        trigger: { type: string, nullable: true, description: 'set for scheduled backups instead of createdBy' }
+
+    BackupDetail:
+      allOf:
+        - $ref: '#/components/schemas/Backup'
+        - type: object
+          properties:
+            output: { type: string, nullable: true, description: 'captured output of the dump command; check this when a backup failed' }
+
+    QueuedBackup:
+      type: object
+      properties:
+        queued: { type: boolean }
+        databaseId: { type: string, format: uuid }
+
+    ApiKey:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        keyHint: { type: string, nullable: true, description: 'first characters of the key' }
+        comment: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        validUntil: { type: string, format: date-time, nullable: true }
+        lastConnectedAt: { type: string, format: date-time, nullable: true }
+        isValid: { type: boolean }
+        createdBy: { type: string }
+        databaseIds:
+          type: array
+          description: 'databases this key may back up; empty means all of them'
+          items: { type: string, format: uuid }
+        databaseNames:
+          type: array
+          description: 'names of those databases, for display'
+          items: { type: string }
+
+    CreatedApiKey:
+      allOf:
+        - $ref: '#/components/schemas/ApiKey'
+        - type: object
+          properties:
+            key: { type: string, description: 'plaintext key — shown exactly once' }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        email: { type: string, format: email }
+        enabled: { type: boolean }
+        roles:
+          type: array
+          items: { type: string }
+
+    RetentionPolicy:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        databaseId: { type: string, format: uuid }
+        keepCount: { type: integer, nullable: true }
+        keepDays: { type: integer, nullable: true }
+        enabled: { type: boolean }
+
+    DashboardStats:
+      type: object
+      required: [totals, databases, activity]
+      properties:
+        totals:
+          type: object
+          required: [databases, hosts, backups, storageBytes, failedLast7Days]
+          properties:
+            databases: { type: integer, format: int64 }
+            hosts: { type: integer, format: int64 }
+            backups: { type: integer, format: int64 }
+            storageBytes: { type: integer, format: int64, description: 'total storage used by all backups' }
+            failedLast7Days: { type: integer, format: int64 }
+            staleDatabases: { type: integer, format: int64, description: 'databases overdue for a successful backup' }
+        databases:
+          type: array
+          description: Per-database aggregates, ordered by storage descending
+          items: { $ref: '#/components/schemas/DatabaseStats' }
+        stale:
+          type: array
+          description: >
+            Scheduled databases whose last successful backup is older than
+            twice their schedule interval (or that never had one), worst
+            first. A failure count alone misses these — a database whose
+            backups silently stopped reports no failures at all.
+          items: { $ref: '#/components/schemas/DatabaseStats' }
+        activity:
+          type: array
+          description: One entry per day for the last 14 days, oldest first
+          items: { $ref: '#/components/schemas/ActivityDay' }
+
+    DatabaseStats:
+      type: object
+      required: [databaseId, databaseName, backupCount, storageBytes]
+      properties:
+        databaseId: { type: string, format: uuid }
+        databaseName: { type: string }
+        backupCount: { type: integer, format: int64 }
+        storageBytes: { type: integer, format: int64 }
+        lastBackupAt: { type: string, format: date-time, nullable: true }
+        lastSuccessfulBackupAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'null when no backup of this database ever succeeded'
+        trigger: { $ref: '#/components/schemas/Trigger' }
+        isStale: { type: boolean, description: 'overdue for a successful backup' }
+        staleSinceDays:
+          type: integer
+          nullable: true
+          description: 'whole days since the last successful backup; null when there never was one'
+
+    ActivityDay:
+      type: object
+      required: [date, finished, failed, total]
+      properties:
+        date: { type: string, format: date, description: 'calendar day, server timezone' }
+        finished: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
+        total: { type: integer, format: int64, description: 'all backups created that day, any state' }
+
+    RetentionPolicyInput:
+      type: object
+      properties:
+        keepCount: { type: integer, minimum: 1, nullable: true, description: 'keep at most the N most recent successful backups' }
+        keepDays: { type: integer, minimum: 1, nullable: true, description: 'delete successful backups older than N days' }
+        enabled: { type: boolean, default: true }

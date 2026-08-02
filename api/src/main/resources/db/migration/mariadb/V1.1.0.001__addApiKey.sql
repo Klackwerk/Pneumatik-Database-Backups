@@ -1,0 +1,2 @@
+create table api_key (id bigint not null auto_increment, version bigint not null, last_connected_at datetime, created_at datetime not null, comment varchar(255), valid_until datetime, created_by_id bigint not null, `key` varchar(255) not null, primary key (id)) engine=InnoDB;
+alter table api_key add constraint FKhxu12faponue7mmt3e4aj9g3f foreign key (created_by_id) references user (id);

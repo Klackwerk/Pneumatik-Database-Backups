@@ -1,0 +1,107 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven {
+           url = 'https://repo.grails.org/grails/restricted'
+        }
+    }
+    dependencies { // Not Published to Gradle Plugin Portal
+        classpath platform("org.apache.grails:grails-bom:$grailsVersion")
+        classpath "org.apache.grails:grails-data-hibernate5"
+        classpath "org.apache.grails:grails-gradle-plugins"
+    }
+}
+
+plugins {
+    id "war"
+    id "idea"
+    id "eclipse"
+}
+
+// Not Published to Gradle Plugin Portal
+apply plugin: "org.apache.grails.gradle.grails-web"
+apply plugin: "org.apache.grails.gradle.grails-gson"
+
+group = "de.klackwerk.pneumatik"
+
+repositories {
+    mavenCentral()
+    maven {
+       url = 'https://repo.grails.org/grails/restricted'
+    }
+}
+
+dependencies {
+    profile "org.apache.grails.profiles:rest-api"
+    developmentOnly "org.springframework.boot:spring-boot-devtools" // Spring Boot DevTools may cause performance slowdowns or compatibility issues on larger applications
+    implementation platform("org.apache.grails:grails-bom:$grailsVersion")
+    implementation "org.apache.grails:grails-core"
+    implementation "org.apache.grails:grails-data-hibernate5"
+    implementation "org.apache.grails:grails-data-mongodb-gson-templates"
+    implementation "org.apache.grails:grails-databinding"
+    implementation "org.apache.grails:grails-events"
+    implementation "org.apache.grails:grails-interceptors"
+    implementation "org.apache.grails:grails-logging"
+    implementation "org.apache.grails:grails-quartz:4.0.1"
+    implementation "org.apache.grails:grails-rest-transforms"
+    implementation "org.apache.grails:grails-services"
+    implementation "org.apache.grails:grails-url-mappings"
+    implementation "org.apache.grails:grails-views-gson"
+    implementation "org.apache.grails:grails-web-boot"
+    implementation "org.springframework.boot:spring-boot-autoconfigure"
+    implementation "org.springframework.boot:spring-boot-starter"
+    implementation "org.springframework.boot:spring-boot-starter-actuator"
+    implementation "org.springframework.boot:spring-boot-starter-logging"
+    implementation "org.springframework.boot:spring-boot-starter-tomcat"
+    implementation "org.springframework.boot:spring-boot-starter-validation"
+    implementation "org.apache.grails:grails-spring-security:$grailsVersion"
+    implementation "org.apache.grails:grails-spring-security-rest:$grailsVersion"
+    implementation "org.apache.grails:grails-mail:$grailsVersion"
+    implementation "org.flywaydb:flyway-core"
+    implementation "org.apache.commons:commons-lang3"
+    implementation platform("software.amazon.awssdk:bom:2.48.4")
+    implementation "software.amazon.awssdk:s3"
+    // version must match SwaggerUiVersion in DocsController
+    runtimeOnly "org.webjars:swagger-ui:5.32.8"
+    console "org.apache.grails:grails-console"
+    runtimeOnly "org.flywaydb:flyway-mysql"
+    runtimeOnly "org.flywaydb:flyway-database-postgresql"
+    // H2 backs the development and test datasources only. Keeping it out of
+    // the production runtime keeps a database engine that is never used
+    // there off the deployed classpath.
+    developmentOnly "com.h2database:h2"
+    testRuntimeOnly "com.h2database:h2"
+    integrationTestRuntimeOnly "com.h2database:h2"
+    runtimeOnly "org.mariadb.jdbc:mariadb-java-client"
+    runtimeOnly "org.postgresql:postgresql"
+    runtimeOnly "com.zaxxer:HikariCP"
+    testImplementation "org.apache.grails:grails-testing-support-datamapping"
+    testImplementation "org.apache.grails:grails-testing-support-web"
+    testImplementation "org.apache.grails:grails-testing-support-views-gson"
+    testImplementation "org.mockito:mockito-core"
+    testImplementation "org.spockframework:spock-core"
+    testImplementation "org.testcontainers:mariadb"
+    testImplementation "org.testcontainers:postgresql"
+    testImplementation "org.testcontainers:spock"
+    testImplementation "org.testcontainers:testcontainers"
+}
+
+compileJava.options.release = 17
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+
+    // DB-compatibility runs: PNEUMATIK_TEST_DB=mariadb|postgres switches the
+    // test datasource to a Testcontainers-managed database (requires Docker).
+    String testDb = System.getenv('PNEUMATIK_TEST_DB')
+    if (testDb == 'mariadb') {
+        environment 'PNEUMATIK_TEST_DB_URL', 'jdbc:tc:mariadb:11:///db'
+        environment 'PNEUMATIK_TEST_DB_DRIVER', 'org.testcontainers.jdbc.ContainerDatabaseDriver'
+        environment 'PNEUMATIK_TEST_DB_USER', 'root'
+    } else if (testDb == 'postgres') {
+        environment 'PNEUMATIK_TEST_DB_URL', 'jdbc:tc:postgresql:18:///db'
+        environment 'PNEUMATIK_TEST_DB_DRIVER', 'org.testcontainers.jdbc.ContainerDatabaseDriver'
+        environment 'PNEUMATIK_TEST_DB_USER', 'test'
+    }
+}
+
