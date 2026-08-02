@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="72" height="72">
+  <!-- Pneumatik: a database whose discs are pressed together and driven up
+       into a cloud. Single-colour amber so it reads on light and dark READMEs. -->
+  <g fill="none" stroke="#d08700" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 22 A7 7 0 0 1 17 10 A11 11 0 0 1 38 8 A8 8 0 0 1 45 22 Z"/>
+    <path d="M26 34 l6 -5 6 5"/>
+    <path d="M26 29 l6 -5 6 5"/>
+    <ellipse cx="32" cy="42" rx="12" ry="4"/>
+    <path d="M20 42 v12 A12 4 0 0 0 44 54 V42"/>
+    <path d="M20 47 A12 4 0 0 0 44 47"/>
+    <path d="M20 51 A12 4 0 0 0 44 51"/>
+  </g>
+</svg>

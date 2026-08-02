@@ -1,0 +1,86 @@
+# Pneumatik 2.0 deployment — one integrated app container (API + frontend)
+# plus its database.
+#
+#   cp .env.example .env               # fill in secrets
+#   openssl rand -base64 32 > pneumatik.key
+#   docker compose up -d
+#
+# The app's own database defaults to MariaDB; switch to PostgreSQL by using
+# the commented service + DB_* overrides.
+
+services:
+  pneumatik:
+    # published image: ghcr.io/klackwerk/pneumatik-database-backups:3.2.0
+    # swap `build: .` for `image:` to run it without building from source
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '${PNEUMATIK_HTTP_PORT:-8080}:8080'
+    environment:
+      GRAILS_ENV: production
+      DB_HOST: db
+      DB_PORT: '3306'
+      DB_NAME: ${DB_NAME:-pneumatik}
+      DB_USER: ${DB_USER:-pneumatik}
+      DB_PASSWORD: ${DB_PASSWORD:?}
+      PNEUMATIK_KEY_FILE: /run/secrets/pneumatik_key
+      PNEUMATIK_LEGACY_SECRET: ${PNEUMATIK_LEGACY_SECRET:-}
+      PNEUMATIK_LEGACY_SALT: ${PNEUMATIK_LEGACY_SALT:-}
+      PNEUMATIK_JWT_SECRET: ${PNEUMATIK_JWT_SECRET:?}
+      PNEUMATIK_STORAGE_PATH: /opt/storage
+      PNEUMATIK_TEMP_PATH: /tmp/pneumatik
+      # frontend and API share one origin; only set for external API consumers
+      PNEUMATIK_CORS_ORIGINS: ${PNEUMATIK_CORS_ORIGINS:-http://localhost}
+      PNEUMATIK_S3_REGION: ${PNEUMATIK_S3_REGION:-us-east-1}
+      PNEUMATIK_S3_ENDPOINT: ${PNEUMATIK_S3_ENDPOINT:-}
+      PNEUMATIK_S3_BUCKET: ${PNEUMATIK_S3_BUCKET:-}
+      PNEUMATIK_S3_KEY: ${PNEUMATIK_S3_KEY:-}
+      PNEUMATIK_S3_SECRET: ${PNEUMATIK_S3_SECRET:-}
+      PNEUMATIK_S3_BASE_PATH: ${PNEUMATIK_S3_BASE_PATH:-backups}
+      PNEUMATIK_MAIL_HOST: ${PNEUMATIK_MAIL_HOST:-}
+      PNEUMATIK_MAIL_PORT: ${PNEUMATIK_MAIL_PORT:-587}
+      PNEUMATIK_MAIL_USERNAME: ${PNEUMATIK_MAIL_USERNAME:-}
+      PNEUMATIK_MAIL_PASSWORD: ${PNEUMATIK_MAIL_PASSWORD:-}
+      PNEUMATIK_MAIL_FROM: ${PNEUMATIK_MAIL_FROM:-pneumatik@localhost}
+      PNEUMATIK_MAIL_ADMIN: ${PNEUMATIK_MAIL_ADMIN:-}
+    volumes:
+      - ${PNEUMATIK_STORAGE_DIR:-./storage}:/opt/storage
+    secrets:
+      - pneumatik_key
+
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?}
+      MARIADB_DATABASE: ${DB_NAME:-pneumatik}
+      MARIADB_USER: ${DB_USER:-pneumatik}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # PostgreSQL alternative for the app database:
+  # db:
+  #   image: postgres:18
+  #   environment:
+  #     POSTGRES_DB: ${DB_NAME:-pneumatik}
+  #     POSTGRES_USER: ${DB_USER:-pneumatik}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:?}
+  #   volumes: [db-data:/var/lib/postgresql/data]
+  # ...and set on pneumatik: DB_DRIVER=org.postgresql.Driver
+  #                          DB_URL=jdbc:postgresql://db:5432/${DB_NAME:-pneumatik}
+
+secrets:
+  pneumatik_key:
+    file: ${PNEUMATIK_KEY_FILE:-./pneumatik.key}
+
+volumes:
+  db-data:

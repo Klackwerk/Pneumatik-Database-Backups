@@ -1,0 +1,10 @@
+.git
+.gradle
+.idea
+**/build
+**/dist
+**/node_modules
+api/.gradle
+storage
+*.key
+.env

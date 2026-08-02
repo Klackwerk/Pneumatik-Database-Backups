@@ -1,0 +1,19 @@
+Thumbs.db
+.DS_Store
+.gradle
+build/
+out/
+.idea
+*.iml
+*.ipr
+*.iws
+.project
+.settings
+.classpath
+node_modules/
+dist/
+.env
+*.key
+# the local backup volume from docker-compose — anchored, or it also swallows
+# the storage package under api/src
+/storage/
