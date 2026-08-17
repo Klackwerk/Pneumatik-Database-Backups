@@ -1,0 +1,36 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard", ":semanticCommitTypeAll(chore)"],
+  "timezone": "Europe/Berlin",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "labels": ["dependencies"],
+  "lockFileMaintenance": { "enabled": true },
+  "vulnerabilityAlerts": {
+    "labels": ["dependencies", "security"],
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "description": "Patch and minor updates of the frontend tooling are noise individually; batch them.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "frontend dependencies"
+    },
+    {
+      "description": "Grails and Spring move together — a partial bump does not build.",
+      "matchPackagePatterns": ["^org\\.apache\\.grails", "^org\\.springframework"],
+      "groupName": "grails and spring"
+    },
+    {
+      "description": "The generated API client is written by npm run generate:api, never by Renovate.",
+      "matchFileNames": ["app/src/api/schema.d.ts"],
+      "enabled": false
+    },
+    {
+      "description": "Major upgrades need a human reading the release notes.",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}

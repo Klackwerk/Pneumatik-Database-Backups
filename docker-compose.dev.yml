@@ -1,0 +1,49 @@
+# Development databases for testing MariaDB/PostgreSQL compatibility of the
+# app's own datastore, plus target databases to back up against.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Run the API against MariaDB:
+#   DB_URL='jdbc:mariadb://127.0.0.1:3308/pneumatik' DB_USER=pneumatik DB_PASSWORD=pneumatik \
+#     GRAILS_ENV=production ./gradlew -p api bootRun
+# Run the API against PostgreSQL:
+#   DB_DRIVER=org.postgresql.Driver DB_URL='jdbc:postgresql://127.0.0.1:5433/pneumatik' \
+#     DB_USER=pneumatik DB_PASSWORD=pneumatik GRAILS_ENV=production ./gradlew -p api bootRun
+
+services:
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: pneumatik
+      MARIADB_USER: pneumatik
+      MARIADB_PASSWORD: pneumatik
+    ports:
+      - '3308:3306'
+
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: pneumatik
+      POSTGRES_USER: pneumatik
+      POSTGRES_PASSWORD: pneumatik
+    ports:
+      - '5433:5432'
+
+  # sample target databases the backup jobs can dump during development
+  target-mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: demo
+    ports:
+      - '3309:3306'
+
+  target-postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: demo
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+    ports:
+      - '5434:5432'

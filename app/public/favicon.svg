@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Pneumatik: compressed database driven up into a cloud. Amber throughout
+       so the mark stays legible on a light or a dark browser tab. -->
+  <g fill="none" stroke="#d08700" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 22 A7 7 0 0 1 17 10 A11 11 0 0 1 38 8 A8 8 0 0 1 45 22 Z"/>
+    <path d="M26 33 l6 -6 6 6"/>
+    <ellipse cx="32" cy="43" rx="12" ry="4"/>
+    <path d="M20 43 v10 A12 4 0 0 0 44 53 V43"/>
+    <path d="M20 48.5 A12 4 0 0 0 44 48.5"/>
+  </g>
+</svg>

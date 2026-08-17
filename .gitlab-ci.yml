@@ -1,0 +1,97 @@
+include:
+  - project: 'tools/build-templates'
+    ref: main
+    file: 'kaniko.yml'
+
+variables:
+  DOCKER_REPOSITORY: "klackwerk"
+  DOCKER_IMAGE: "pneumatik"
+
+stages:
+  - test
+  - build
+  - maintenance
+
+api_tests:
+  stage: test
+  image: eclipse-temurin:17-jdk-jammy
+  variables:
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle-home"
+  cache:
+    key: gradle
+    paths:
+      - .gradle-home/caches
+      - .gradle-home/wrapper
+  script:
+    - cd api
+    - ./gradlew --no-daemon test integrationTest
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - api/build/test-results/test/*.xml
+        - api/build/test-results/integrationTest/*.xml
+
+frontend_checks:
+  stage: test
+  image: node:22
+  cache:
+    key: npm
+    paths:
+      - app/.npm
+  script:
+    - cd app
+    - npm ci --cache .npm --prefer-offline
+    - npm run typecheck
+    - npm run lint
+    - npm run build
+
+# Fails when api/src/main/resources/openapi.yaml changed without regenerating
+# app/src/api/schema.d.ts (npm run generate:api).
+contract_sync:
+  stage: test
+  image: node:22
+  cache:
+    key: npm
+    paths:
+      - app/.npm
+  script:
+    - cd app
+    - npm ci --cache .npm --prefer-offline
+    - npm run generate:api
+    - git diff --exit-code src/api/schema.d.ts || (echo "openapi.yaml and the generated client are out of sync — run 'npm run generate:api' in app/ and commit." && exit 1)
+
+build_prod:
+  stage: build
+  variables:
+    DOCKER_IMAGE_TAG: "stable"
+  extends: .kaniko
+  rules:
+    - if: '$CI_COMMIT_REF_NAME =~ /^release\//'
+
+build_staging:
+  stage: build
+  extends: .kaniko
+  rules:
+    - if: '$CI_COMMIT_REF_NAME == "main"'
+
+renovate:
+  stage: maintenance
+  image:
+    name: renovate/renovate:41
+    entrypoint: ['']
+  variables:
+    RENOVATE_PLATFORM: gitlab
+    RENOVATE_ENDPOINT: $CI_API_V4_URL
+    RENOVATE_AUTODISCOVER: 'false'
+    RENOVATE_REPOSITORIES: $CI_PROJECT_PATH
+    RENOVATE_ONBOARDING: 'false'
+    RENOVATE_REQUIRE_CONFIG: 'required'
+    LOG_LEVEL: info
+  script:
+    - renovate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $RENOVATE_TOKEN'
+    - if: '$CI_PIPELINE_SOURCE == "web" && $RENOVATE_TOKEN'
+      when: manual
+      allow_failure: true

@@ -1,0 +1,164 @@
+info:
+  app:
+    name: '@info.app.name@'
+    version: '@info.app.version@'
+    grailsVersion: '@info.app.grailsVersion@'
+
+grails:
+  profile: rest-api
+  codegen:
+    defaultPackage: de.klackwerk.pneumatik
+  # CORS is configured in application.groovy (env-driven origin list)
+  databinding:
+    dateFormats:
+      - "yyyy-MM-dd'T'HH:mm:ss.SSSX"
+      - "yyyy-MM-dd'T'HH:mm:ssX"
+      - "yyyy-MM-dd'T'HH:mm:ss"
+      - 'yyyy-MM-dd'
+  mime:
+    types:
+      json:
+        - application/json
+        - text/json
+      hal:
+        - application/hal+json
+        - application/hal+xml
+      all: '*/*'
+  mail:
+    host: '${PNEUMATIK_MAIL_HOST:localhost}'
+    port: ${PNEUMATIK_MAIL_PORT:587}
+    username: '${PNEUMATIK_MAIL_USERNAME:}'
+    password: '${PNEUMATIK_MAIL_PASSWORD:}'
+    default:
+      from: '${PNEUMATIK_MAIL_FROM:pneumatik@localhost}'
+    adminMail: '${PNEUMATIK_MAIL_ADMIN:admin@localhost}'
+    props:
+      mail.smtp.auth: '${PNEUMATIK_MAIL_SMTP_AUTH:true}'
+      mail.smtp.starttls.enable: 'true'
+
+quartz:
+  autoStartup: true
+
+management:
+  endpoints:
+    enabled-by-default: false
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      enabled: true
+
+pneumatik:
+  security:
+    # Password for the "admin" account created on an empty database. Empty
+    # means one is generated and logged once at first startup.
+    admin-password: '${PNEUMATIK_ADMIN_PASSWORD:}'
+    # Failed sign-ins are counted per client address and per username; after
+    # max-attempts within window-minutes that key is refused for lock-minutes.
+    login-throttle:
+      max-attempts: ${PNEUMATIK_LOGIN_MAX_ATTEMPTS:5}
+      window-minutes: ${PNEUMATIK_LOGIN_WINDOW_MINUTES:15}
+      lock-minutes: ${PNEUMATIK_LOGIN_LOCK_MINUTES:15}
+      # Enable only behind a proxy that overwrites X-Forwarded-For, otherwise
+      # a caller chooses its own throttling identity.
+      trust-forwarded-for: ${PNEUMATIK_TRUST_FORWARDED_FOR:false}
+    hsts-max-age-seconds: ${PNEUMATIK_HSTS_MAX_AGE:31536000}
+    download-ticket-seconds: ${PNEUMATIK_DOWNLOAD_TICKET_SECONDS:60}
+  backup:
+    timeout-minutes: ${PNEUMATIK_BACKUP_TIMEOUT_MINUTES:30}
+  notification:
+    # hours of silence after a failure mail before the same database mails again
+    quiet-hours: ${PNEUMATIK_NOTIFICATION_QUIET_HOURS:6}
+    send-attempts: ${PNEUMATIK_NOTIFICATION_SEND_ATTEMPTS:3}
+  storage:
+    # AES-256-GCM over every stored archive, keyed from the same keyfile as the
+    # stored credentials. Losing that keyfile then means losing the backups too,
+    # so read docs/restore.md before switching this on.
+    encrypt-archives: ${PNEUMATIK_ENCRYPT_ARCHIVES:false}
+    temp:
+      path: '${PNEUMATIK_TEMP_PATH:/tmp/pneumatik}'
+    direct:
+      path: '${PNEUMATIK_STORAGE_PATH:/opt/storage}'
+    s3:
+      region: '${PNEUMATIK_S3_REGION:us-east-1}'
+      endpoint: '${PNEUMATIK_S3_ENDPOINT:}'
+      bucket: '${PNEUMATIK_S3_BUCKET:}'
+      key: '${PNEUMATIK_S3_KEY:}'
+      secret: '${PNEUMATIK_S3_SECRET:}'
+      basePath: '${PNEUMATIK_S3_BASE_PATH:backups}'
+  credentials:
+    # data-encryption key: base64-encoded 32 bytes, from a mounted keyfile
+    # (recommended) or inline for development. Never commit a real key.
+    key-file: '${PNEUMATIK_KEY_FILE:}'
+    key: '${PNEUMATIK_KEY:}'
+    # legacy Grails-4 cipher parameters, only needed until the startup
+    # migration has re-encrypted all existing values
+    legacy:
+      secret: '${PNEUMATIK_LEGACY_SECRET:}'
+      salt: '${PNEUMATIK_LEGACY_SALT:}'
+
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/{vendor}
+  main:
+    lazy-initialization: false
+
+hibernate:
+  cache:
+    queries: false
+    use_second_level_cache: false
+    use_query_cache: false
+
+dataSource:
+  pooled: true
+  jmxExport: true
+  driverClassName: org.h2.Driver
+  username: sa
+  password: ''
+
+environments:
+  development:
+    server:
+      port: 8085
+    dataSource:
+      dbCreate: create-drop
+      url: jdbc:h2:mem:devDb;MODE=MYSQL;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE
+    spring:
+      flyway:
+        enabled: false
+    pneumatik:
+      credentials:
+        # dev-only key (base64 of 32 bytes) so the app starts out of the box
+        key: 'cG5ldW1hdGlrLWRldi1vbmx5LTMyLWJ5dGUta2V5ISE='
+      storage:
+        temp:
+          path: '${PNEUMATIK_TEMP_PATH:/tmp/pneumatik/temp}'
+        direct:
+          path: '${PNEUMATIK_STORAGE_PATH:/tmp/pneumatik/storage}'
+  test:
+    quartz:
+      autoStartup: false
+    hibernate:
+      # lets integration tests assert query counts on hot paths
+      generate_statistics: true
+    dataSource:
+      dbCreate: create-drop
+      url: jdbc:h2:mem:testDb;MODE=MYSQL;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE
+    spring:
+      flyway:
+        enabled: false
+    pneumatik:
+      credentials:
+        key: 'cG5ldW1hdGlrLWRldi1vbmx5LTMyLWJ5dGUta2V5ISE='
+  production:
+    dataSource:
+      dbCreate: none
+      driverClassName: '${DB_DRIVER:org.mariadb.jdbc.Driver}'
+      url: '${DB_URL:jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:pneumatik}${DB_EXTRA_ARGS:}}'
+      username: '${DB_USER:pneumatik}'
+      password: '${DB_PASSWORD:}'
+      properties:
+        maxPoolSize: ${DB_POOL_MAX:10}
+        minPoolSize: ${DB_POOL_MIN:2}

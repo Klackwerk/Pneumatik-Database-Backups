@@ -1,0 +1,101 @@
+/*
+ * Bootstrap 5.3 with the klackwerk brand amber as primary: stepped dark in
+ * light mode so white-on-primary text keeps its contrast, the full #ffc107
+ * with dark ink in dark mode, matching the brand site.
+ */
+$primary: #997404;
+
+@import "bootstrap/scss/bootstrap";
+
+$amber: #ffc107;
+$amber-hover: #ffcd39;
+$ink-on-amber: #212529;
+
+[data-bs-theme="dark"] {
+    --bs-primary: #{$amber};
+    --bs-primary-rgb: #{to-rgb($amber)};
+    --bs-link-color: #{$amber};
+    --bs-link-color-rgb: #{to-rgb($amber)};
+    --bs-link-hover-color: #{$amber-hover};
+    --bs-link-hover-color-rgb: #{to-rgb($amber-hover)};
+
+    .btn-primary {
+        --bs-btn-bg: #{$amber};
+        --bs-btn-border-color: #{$amber};
+        --bs-btn-color: #{$ink-on-amber};
+        --bs-btn-hover-bg: #{$amber-hover};
+        --bs-btn-hover-border-color: #{$amber-hover};
+        --bs-btn-hover-color: #{$ink-on-amber};
+        --bs-btn-active-bg: #{$amber-hover};
+        --bs-btn-active-border-color: #{$amber-hover};
+        --bs-btn-active-color: #{$ink-on-amber};
+        --bs-btn-disabled-bg: #{$amber};
+        --bs-btn-disabled-border-color: #{$amber};
+        --bs-btn-disabled-color: #{$ink-on-amber};
+        --bs-btn-focus-shadow-rgb: #{to-rgb($amber)};
+    }
+
+    .nav-pills {
+        --bs-nav-pills-link-active-bg: #{$amber};
+        --bs-nav-pills-link-active-color: #{$ink-on-amber};
+    }
+
+    .form-check-input:checked {
+        background-color: $amber;
+        border-color: $amber;
+    }
+}
+
+/* categorical chart palette (validated, fixed order: amber, blue, magenta, violet, aqua) */
+:root {
+    --chart-1: oklch(0.764 0.161 75.1);
+    --chart-2: oklch(0.575 0.163 255.5);
+    --chart-3: oklch(0.716 0.141 357.4);
+    --chart-4: oklch(0.433 0.167 283.6);
+    --chart-5: oklch(0.669 0.141 162.1);
+    /* reserved status colors (fixed across modes) and the "Other" bucket */
+    --chart-good: #0ca30c;
+    --chart-bad: #d03b3b;
+    --chart-other: oklch(0.85 0.005 260);
+}
+
+[data-bs-theme="dark"] {
+    --chart-1: oklch(0.67 0.143 73.2);
+    --chart-2: oklch(0.622 0.161 255.1);
+    --chart-3: oklch(0.622 0.171 0.8);
+    --chart-4: oklch(0.67 0.145 286.8);
+    --chart-5: oklch(0.621 0.128 163.1);
+    --chart-good: #0ca30c;
+    --chart-bad: #d03b3b;
+    --chart-other: oklch(0.45 0.005 260);
+}
+
+/* fixed sidebar for the authenticated layout */
+.app-sidebar {
+    width: 15rem;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.border-dashed {
+    border-style: dashed !important;
+}
+
+/* stat cards on the dashboard are links; give them pointer feedback */
+a > .stat-card:hover {
+    background-color: var(--bs-tertiary-bg);
+}
+
+/* Respect the user's motion preference: collapse all animation/transitions. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
